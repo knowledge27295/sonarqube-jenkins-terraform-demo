@@ -68,11 +68,10 @@ pipeline {
             // Get EC2 Public IP from Terraform output
                        def ec2_ip = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
                        git branch: 'main', url: 'https://github.com/knowledge27295/sonarqube-jenkins-terraform-demo.git'
-                       sh """
-                       chmod 400 Infra.pem
-
-                       ssh -o StrictHostKeyChecking=no -i Infra.pem ubuntu@${ec2_ip} 'bash -s' < nginx-install.sh
-                       """
+                       withCredentials([sshUserPrivateKey(credentialsId: 'infra_ssh_key', keyFileVariable: 'SSH_KEY')]) {
+                           sh """
+                               ssh -o StrictHostKeyChecking=no -i $SSH_KEY ubuntu@${ec2_ip} 'bash -s' < nginx-install.sh
+                           """
         }
     }
 }
