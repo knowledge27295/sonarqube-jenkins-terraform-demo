@@ -61,6 +61,17 @@ pipeline {
                 }   
             }
         }
+
+        stage('Install Nginx') {
+            steps {
+                // Clone your GitHub repo
+                git branch: 'main', url: 'https://github.com/knowledge27295/sonarqube-jenkins-terraform-demo.git'
+
+                // Make the script executable and run it
+                sh 'chmod +x nginx-install.sh'
+                sh './nginx-install.sh'
+            }
+        }
         stage('Run terraform destroy or not?') {
             steps {
                 script {
