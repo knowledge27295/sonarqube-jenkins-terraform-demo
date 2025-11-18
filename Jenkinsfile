@@ -1,54 +1,70 @@
 pipeline { 
     agent any
+
     environment { 
         AWS_ACCESS_KEY_ID     = credentials('aws_iam_access_key') 
         AWS_SECRET_ACCESS_KEY = credentials('aws_iam_secret_access_key')
     }
+
     stages { 
+
         stage('Terraform Initialization') { 
             steps { 
                 sh 'terraform init || terraform init -upgrade'
             } 
         } 
+
         stage('Terraform Format') { 
             steps { 
                 sh 'terraform fmt -check || exit 0' 
             } 
         } 
+
         stage('Terraform Validate') { 
             steps { 
                 sh 'terraform validate'
             } 
         }
+
         stage('SonarQube Analysis') {
-           steps {
-               script {
-                   def scannerHome = tool 'sonarqube-1';
-                   withSonarQubeEnv('sonarqube-1') {
-                       sh "${scannerHome}/bin/sonar-scanner"
-                   }
-               }
-           }
+            steps {
+                script {
+                    def scannerHome = tool 'sonarqube-1';
+                    withSonarQubeEnv('sonarqube-1') {
+                        sh "${scannerHome}/bin/sonar-scanner"
+                    }
+                }
+            }
         }
+
         stage('Terraform Planning') { 
             steps { 
                 sh 'terraform plan -no-color -out=terraform_plan'
                 sh 'terraform show -json ./terraform_plan > terraform_plan.json'
             } 
         }
+
         stage('archive terrafrom plan output') {
             steps {
                 archiveArtifacts artifacts: 'terraform_plan.json', excludes: 'output/*.md', onlyIfSuccessful: true
             }
         }
+
         stage('Review and Run terraform apply') {
             steps {
                 script {
-                    env.selected_action = input  message: 'Select action to perform',ok : 'Proceed',id :'tag_id',
-                    parameters:[choice(choices: ['apply', 'abort'], description: 'Select action', name: 'action')]
+                    env.selected_action = input(
+                        message: 'Select action to perform',
+                        ok: 'Proceed',
+                        id: 'tag_id',
+                        parameters: [
+                            choice(choices: ['apply', 'abort'], description: 'Select action', name: 'action')
+                        ]
+                    )
                 }
             }
         }
+
         stage('Terraform Apply') { 
             steps {
                 script {
@@ -63,27 +79,36 @@ pipeline {
         }
 
         stage('Install Nginx on EC2') {
-             steps {
-                  script {
-            // Get EC2 Public IP from Terraform output
-                       def ec2_ip = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
-                       git branch: 'main', url: 'https://github.com/knowledge27295/sonarqube-jenkins-terraform-demo.git'
-                       withCredentials([sshUserPrivateKey(credentialsId: 'infra_ssh_key', keyFileVariable: 'SSH_KEY')]) {
-                           sh """
-                               ssh -o StrictHostKeyChecking=no -i $SSH_KEY ubuntu@${ec2_ip} 'bash -s' < nginx-install.sh
-                           """
+            steps {
+                script {
+                    def ec2_ip = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
+
+                    git branch: 'main', url: 'https://github.com/knowledge27295/sonarqube-jenkins-terraform-demo.git'
+
+                    withCredentials([sshUserPrivateKey(credentialsId: 'infra_ssh_key', keyFileVariable: 'SSH_KEY')]) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no -i $SSH_KEY ubuntu@${ec2_ip} 'bash -s' < nginx-install.sh
+                        """
+                    }
+                }
+            }
         }
-    }
-}
 
         stage('Run terraform destroy or not?') {
             steps {
                 script {
-                    env.selected_action = input  message: 'Select action to perform',ok : 'Proceed',id :'tag_id',
-                    parameters:[choice(choices: ['destroy', 'abort'], description: 'Select action', name: 'action')]
+                    env.selected_action = input(
+                        message: 'Select action to perform',
+                        ok: 'Proceed',
+                        id: 'tag_id',
+                        parameters: [
+                            choice(choices: ['destroy', 'abort'], description: 'Select action', name: 'action')
+                        ]
+                    )
                 }
             }
         }
+
         stage('Terraform Destroy') { 
             steps {
                 script {
