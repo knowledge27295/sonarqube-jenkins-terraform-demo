@@ -62,16 +62,21 @@ pipeline {
             }
         }
 
-        stage('Install Nginx') {
-            steps {
-                // Clone your GitHub repo
-                git branch: 'main', url: 'https://github.com/knowledge27295/sonarqube-jenkins-terraform-demo.git'
+        stage('Install Nginx on EC2') {
+             steps {
+                  script {
+            // Get EC2 Public IP from Terraform output
+                       def ec2_ip = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
+                       git branch: 'main', url: 'https://github.com/knowledge27295/sonarqube-jenkins-terraform-demo.git'
+                       sh """
+                       chmod 400 Infra.pem
 
-                // Make the script executable and run it
-                sh 'chmod +x nginx-install.sh'
-                sh './nginx-install.sh'
-            }
+                       ssh -o StrictHostKeyChecking=no -i Infra.pem ubuntu@${ec2_ip} 'bash -s' < nginx-install.sh
+                       """
         }
+    }
+}
+
         stage('Run terraform destroy or not?') {
             steps {
                 script {
